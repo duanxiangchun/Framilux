@@ -77,3 +77,17 @@ Framilux/
 **M1 进行中 — Web 原型已跑通「取流 → FrameGate(10 fps) → 三分线叠加层」**（实测 9.5/10 fps、零异常、零外部请求，细节见 [web-prototype/README.md](web-prototype/README.md)）。
 
 下一步：M1 步骤 3–4 —— MediaPipe Tasks Vision 接入人脸/姿态，落到 `core-composition` 的 R1/R2/R3/R4 打分与 debug 面板。里程碑总览见 [docs/05-roadmap.md](docs/05-roadmap.md)，上手前先读 [docs/06-dev-guide.md](docs/06-dev-guide.md)。
+
+## 许可（非商用）
+
+本项目（自有代码与文档）采用 **[PolyForm Noncommercial License 1.0.0](LICENSE)**，版权声明见 [NOTICE](NOTICE)。
+
+| | |
+|---|---|
+| ✅ 允许 | 个人学习、研究、实验、业余项目；慈善/教育/公立科研/公共安全卫生/环保/政府机构使用（不论经费来源）；修改与再分发（须附带许可证与 NOTICE） |
+| ❌ 不允许 | **任何商业用途**：公司内部使用、集成进商业产品、提供付费服务或托管服务，均需另行取得授权 |
+| 商业授权 | 版权人保留双许可（dual licensing）权利，商用请通过仓库主页联系 |
+
+> ⚠️ **请不要对外称本项目为「开源软件」**。限制使用领域（如禁止商用）与 OSI 的开源定义冲突，因此这是**源码可见的非商用许可**，GitHub 会把它识别为 non-standard 许可。
+
+**第三方模型权重不适用本项目许可**：`models/manifest.json` 中每个模型有各自的许可证，下载与使用须遵守其条款；标注「需核对」的模型不得进入商用构建。

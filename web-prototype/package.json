@@ -1,6 +1,7 @@
 {
   "name": "framilux-web-prototype",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "version": "0.1.0",
   "type": "module",
   "description": "Framilux M1 — 浏览器端构图打分与引导验证原型（全离线）",

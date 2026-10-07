@@ -1,0 +1,15 @@
+Required Notice: Copyright (c) 2026 duanxiangchun (https://github.com/duanxiangchun/Framilux)
+
+适用范围
+--------
+本声明覆盖 Framilux 仓库内的**自有代码与文档**（docs/、web-prototype/、android/、models/manifest.json、
+models/download.ps1 及仓库根目录文件），依据 LICENSE 中的 PolyForm Noncommercial License 1.0.0 授权。
+
+第三方模型权重不在本许可范围内
+------------------------------
+models/manifest.json 中登记的各模型权重有各自的许可证（Apache-2.0 / MIT / 自定义等），
+下载与使用须遵守其各自条款；标注「需核对」的模型不得进入商用构建。
+
+商业授权
+--------
+本项目的版权人保留商业授权（dual licensing）的权利。任何商业用途请通过仓库主页联系版权人。
