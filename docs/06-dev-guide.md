@@ -77,9 +77,12 @@ pwsh -File models/download.ps1
 
 ## 5. 分支与提交
 
+- 远端：`https://github.com/duanxiangchun/Framilux.git`（`origin`，默认分支 `main`）
 - `main` 保护，功能走 `feature/<主题>`
 - 提交信息：`类型(范围): 描述`，例：`feat(composition): add leadRoom rule`、`fix(capture): align imu timestamp with frame`
 - 提交前必跑：单测 + lint；（M2 起）+ 许可证门禁 + 无网络权限检查
+- **身份**：本仓库用**仓库本地**配置 `duanxiangchun <duanxiangchun@users.noreply.github.com>`（`git config --local`）。全局 `~/.gitconfig` 是工作身份 `MG-Duan <duanxc@mgdaas.com>`，**不要动**
+- **认证坑**：Windows 凭据管理器里有一条失效的 `git:https://github.com`（MG-Duan），用裸 URL 会被 git 取到它并报 `Password authentication is not supported`。所以 **origin URL 里保留了 `duanxiangchun@` 前缀，别去掉**；去掉前缀就退回踩坑
 
 ## 6. 调试与性能
 
