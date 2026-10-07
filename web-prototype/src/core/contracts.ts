@@ -18,14 +18,14 @@ export const rectCenter = (r: NormRect): NormPoint => ({
   y: (r.t + r.b) / 2,
 });
 
+/** 与 docs/03 §3 的 6 个画像一一对应；微距并入 food（主体尺度由 R3 subjectRatio 处理） */
 export type SceneKind =
   | "portrait"
   | "landscape"
   | "architecture"
   | "street"
   | "food"
-  | "night"
-  | "macro";
+  | "night";
 
 export interface DevicePose {
   rollDeg: number;

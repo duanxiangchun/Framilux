@@ -68,7 +68,7 @@ pwsh -File models/download.ps1
 - **规则扩展流程**（照这个顺序，别跳步）：
   1. 在 `docs/03` 里加一条 `R编号`，写清输入、公式、建议文案
   2. 实现 `CompositionRule`
-  3. 在 `SceneWeights` 里为 7 个场景画像各自定权重 —— **权重只能改这一处**
+  3. 在 `SceneWeights` 里为 6 个场景画像各自定权重 —— **权重只能改这一处**
   4. 写单测（喂固定的 `PerceptionFrame`，断言分项得分）
   5. 更新 `docs/03` 的权重表
 - **文案不硬编码**：一律走 `textKey` + 本地化资源
