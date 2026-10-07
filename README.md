@@ -32,6 +32,20 @@
 
 core 层的**特征契约、规则引擎、引导求解**是跨平台纯逻辑，三端共享设计（见 `docs/04-interface-contracts.md`）。
 
+## 快速开始（新机器）
+
+```powershell
+git clone https://github.com/duanxiangchun/Framilux.git
+cd Framilux/web-prototype
+pnpm install          # Node 版本要求见 package.json 的 engines（也可用 .nvmrc）
+pnpm dev              # 打开 http://127.0.0.1:5173（须走 127.0.0.1，getUserMedia 要求安全上下文）
+```
+
+- 依赖版本由 `web-prototype/pnpm-lock.yaml` 锁定，两台机器装出来的版本完全一致
+- `pnpm install` 需要联网；**装完之后 App 本身不发起任何网络请求**（离线红线见 `AGENTS.md`）
+- 模型权重体积大、不入库：在需要模型的机器上跑 `pwsh -File models/download.ps1 -DryRun` 先看清单，去掉 `-DryRun` 才真正下载并登记 sha256
+- Android（M2）的 Gradle Wrapper 尚未建立，届时随仓库提交，否则新机器打不开 android 工程
+
 ## 文档导航
 
 | 文档 | 内容 |
@@ -60,4 +74,6 @@ Framilux/
 
 ## 当前状态
 
-**M0 — 架构设计完成，开发手册就绪，代码骨架待填充。** 下一步按 `docs/05-roadmap.md` 从 M1 开始落地；上手前先读 [docs/06-dev-guide.md](docs/06-dev-guide.md)。
+**M1 进行中 — Web 原型已跑通「取流 → FrameGate(10 fps) → 三分线叠加层」**（实测 9.5/10 fps、零异常、零外部请求，细节见 [web-prototype/README.md](web-prototype/README.md)）。
+
+下一步：M1 步骤 3–4 —— MediaPipe Tasks Vision 接入人脸/姿态，落到 `core-composition` 的 R1/R2/R3/R4 打分与 debug 面板。里程碑总览见 [docs/05-roadmap.md](docs/05-roadmap.md)，上手前先读 [docs/06-dev-guide.md](docs/06-dev-guide.md)。
