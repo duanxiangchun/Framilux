@@ -1,0 +1,25 @@
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/*.iml
+
+# Web prototype
+web-prototype/node_modules/
+web-prototype/dist/
+web-prototype/.vite/
+
+# Models & weights (大文件不入库，按 models/manifest.json 下载)
+models/**/*.tflite
+models/**/*.onnx
+models/**/*.bin
+models/**/*.pt
+!models/manifest.json
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+.vscode/

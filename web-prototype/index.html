@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- 空白 data: favicon：避免浏览器为 /favicon.ico 发起请求（离线红线，AGENTS.md #1） -->
+    <link rel="icon" href="data:," />
+    <title>Framilux · M1 取景原型</title>
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="logo" aria-hidden="true"></span>
+          <div>
+            <h1>Framilux</h1>
+            <p class="sub">M1 · 步骤 1–2：取流 → FrameGate(10 fps) → 三分线叠加层</p>
+          </div>
+        </div>
+        <p class="offline">离线可用 · 本页不发起任何网络请求</p>
+      </header>
+
+      <main class="stage-wrap">
+        <div class="stage" id="stage">
+          <video id="video" playsinline autoplay muted></video>
+          <canvas id="overlay"></canvas>
+          <div class="hint" id="hint" hidden>
+            <p id="hint-text"></p>
+            <button id="btn-retry" type="button">重试</button>
+          </div>
+        </div>
+      </main>
+
+      <footer class="controls">
+        <button id="btn-switch" type="button">切换摄像头</button>
+        <button id="btn-grid" type="button" aria-pressed="true">三分线</button>
+        <button id="btn-hud" type="button" aria-pressed="true">调试面板</button>
+        <span class="spacer"></span>
+        <label class="ctl" for="sel-fps">
+          节流目标
+          <select id="sel-fps">
+            <option value="5">5 fps</option>
+            <option value="10" selected>10 fps</option>
+            <option value="15">15 fps</option>
+            <option value="30">30 fps</option>
+          </select>
+        </label>
+      </footer>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
