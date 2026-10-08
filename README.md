@@ -77,9 +77,16 @@ Framilux/
 
 ## 当前状态
 
-**M1 进行中 — Web 原型已跑通「取流 → FrameGate(10 fps) → 三分线叠加层」**（实测 9.5/10 fps、零异常、零外部请求，细节见 [web-prototype/README.md](web-prototype/README.md)）。
+**M1 第一版已可用 —— 浏览器里对着画面就有构图分、单句建议与叠加引导。**
 
-下一步：M1 步骤 3–4 —— MediaPipe Tasks Vision 接入人脸/姿态，落到 `core-composition` 的 R1/R2/R3/R4 打分与 debug 面板。里程碑总览见 [docs/05-roadmap.md](docs/05-roadmap.md)，上手前先读 [docs/06-dev-guide.md](docs/06-dev-guide.md)。
+- **决策层**：R1–R6、R10、R11 共 8 条规则 + 场景画像权重表 + 引导求解 + EMA/迟滞平滑；纯逻辑、零平台依赖、可单测
+- **感知层**：MediaPipe 人脸 + 姿态（GPU 失败自动回落 CPU）、160×90 光照统计、块梯度显著图（降级代理）
+- **交互**：三分线 / 水平仪 / 主体框 / 目标虚影框 / 箭头 / 单句建议 / 评分徽章 + 可实时拖滑块的 debug 面板
+- **实测**（headless Chrome + 合成摄像头）：10 fps 目标下实际 9.3–9.6 fps，感知约 40 ms/帧，控制台 0 error、页面 0 网络请求
+
+跑起来：`cd web-prototype && pnpm install && pnpm assets && pnpm dev` → <http://127.0.0.1:5173>（细节与已知限制见 [web-prototype/README.md](web-prototype/README.md)）。
+
+下一步优先级：显著性换真模型 → 场景画像接 Places365（M3）→ 姿态与光影规则（M4）。里程碑见 [docs/05-roadmap.md](docs/05-roadmap.md)，上手前先读 [docs/06-dev-guide.md](docs/06-dev-guide.md)。
 
 ## 许可（非商用）
 

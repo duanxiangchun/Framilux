@@ -10,6 +10,9 @@ android/*.iml
 web-prototype/node_modules/
 web-prototype/dist/
 web-prototype/.vite/
+# Web 原型的本地模型资源：由 pnpm assets 拉取（体积大，不入库）
+web-prototype/public/mediapipe/
+web-prototype/public/models/
 
 # Models & weights (大文件不入库，按 models/manifest.json 下载)
 models/**/*.tflite
