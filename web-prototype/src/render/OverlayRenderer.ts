@@ -1,35 +1,54 @@
+import type { GuidanceSnapshot, NormRect } from "../core/contracts";
+import { THIRD_POINTS, THIRD_VALUES } from "../core/contracts";
+
 /**
  * L4 引导渲染层：Canvas 2D 叠加层。
  *
- * 本步骤（M1 步骤 1–2）只画两样东西：
- * - 三分线（docs/03 R1 的几何提示，静态叠加）
- * - debug HUD：帧率 / 丢帧 / 单帧耗时 / 采集→渲染延迟
+ * 分工：**画面叠加在 canvas**，调试文字与滑块在 DOM 面板（ui/debug-panel.ts）——
+ * 文字面板放 DOM 才能选中/滚动/拖滑块，也不必每帧重绘。
  *
- * 坐标约定（docs/04 §1）：内部一律用归一化 [0,1] 坐标，像素换算只发生在本文件。
- * 画面采用 object-fit: cover，因此叠加层必须用同一套 cover 映射
- * （computeCoverLayout），否则后面的人脸框/主体框会整体偏移。
+ * 坐标约定（docs/04 §1）：内部一律归一化 [0,1]，像素换算只发生在本文件；
+ * 画面用 object-fit: cover，叠加层必须用同一套 cover 映射，否则整体偏移。
+ * 渲染以 60fps 读最新快照，与 10fps 的推理解耦（docs/01 §3）。
  */
 
-import { THIRD_POINTS, THIRD_VALUES } from "../core/contracts";
-import type { FrameGateStats } from "../capture/FrameGate";
-
-export interface OverlayOptions {
-  showGrid?: boolean;
-  showHud?: boolean;
+export interface LayerToggles {
+  thirds: boolean;
+  horizon: boolean;
+  subjectBox: boolean;
+  targetGhost: boolean;
+  arrow: boolean;
+  advice: boolean;
+  score: boolean;
 }
+
+export const DEFAULT_LAYERS: LayerToggles = {
+  thirds: true,
+  horizon: true,
+  subjectBox: true,
+  targetGhost: true,
+  arrow: true,
+  advice: true,
+  score: true,
+};
+
+export const LAYER_LABELS: Record<keyof LayerToggles, string> = {
+  thirds: "三分线",
+  horizon: "水平仪",
+  subjectBox: "主体框",
+  targetGhost: "目标虚影框",
+  arrow: "箭头",
+  advice: "单句建议",
+  score: "评分徽章",
+};
 
 export interface RenderInput {
   videoW: number;
   videoH: number;
-  /** 当前帧采集时刻（单调纳秒） */
-  captureTsNs: number;
-  /** 是否已收到过真实的视频帧时间戳；false 时延迟显示为 — */
-  hasFrameTiming: boolean;
   mirrored: boolean;
-  gate: FrameGateStats;
-  /** 如 "1280×720 @30fps · 前置"，只用于显示 */
-  sourceText: string;
-  online: boolean;
+  snapshot: GuidanceSnapshot | null;
+  adviceText: string;
+  layers: LayerToggles;
 }
 
 export interface CoverLayout {
@@ -40,27 +59,25 @@ export interface CoverLayout {
 }
 
 /** object-fit: cover 的等价映射（CSS 与 canvas 必须一致） */
-export function computeCoverLayout(
-  stageW: number,
-  stageH: number,
-  videoW: number,
-  videoH: number,
-): CoverLayout {
+export function computeCoverLayout(stageW: number, stageH: number, videoW: number, videoH: number): CoverLayout {
   if (videoW <= 0 || videoH <= 0 || stageW <= 0 || stageH <= 0) {
     return { offsetX: 0, offsetY: 0, drawW: stageW, drawH: stageH };
   }
   const scale = Math.max(stageW / videoW, stageH / videoH);
   const drawW = videoW * scale;
   const drawH = videoH * scale;
-  return {
-    offsetX: (stageW - drawW) / 2,
-    offsetY: (stageH - drawH) / 2,
-    drawW,
-    drawH,
-  };
+  return { offsetX: (stageW - drawW) / 2, offsetY: (stageH - drawH) / 2, drawW, drawH };
 }
 
-const HUD_FONT = '12px ui-monospace, SFMono-Regular, Consolas, "Cascadia Mono", monospace';
+const COLOR = {
+  grid: "rgba(255,255,255,0.85)",
+  gridHalo: "rgba(0,0,0,0.35)",
+  subject: "#4da3ff",
+  target: "#ffd24d",
+  ok: "#3ddc84",
+  warn: "#ffd24d",
+  bad: "#ff5c5c",
+};
 
 export class OverlayRenderer {
   private readonly ctx: CanvasRenderingContext2D;
@@ -69,18 +86,12 @@ export class OverlayRenderer {
   private dpr = 1;
   private layout: CoverLayout = { offsetX: 0, offsetY: 0, drawW: 0, drawH: 0 };
 
-  showGrid: boolean;
-  showHud: boolean;
-
-  constructor(readonly canvas: HTMLCanvasElement, opts: OverlayOptions = {}) {
+  constructor(readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("无法获取 2D 上下文（canvas.getContext('2d') 返回 null）");
+    if (!ctx) throw new Error("无法获取 2D 上下文");
     this.ctx = ctx;
-    this.showGrid = opts.showGrid ?? true;
-    this.showHud = opts.showHud ?? true;
   }
 
-  /** 舞台的 CSS 尺寸 + devicePixelRatio；尺寸不变时不做任何事 */
   resize(cssW: number, cssH: number, dpr: number): void {
     const w = Math.max(0, Math.round(cssW));
     const h = Math.max(0, Math.round(cssH));
@@ -96,21 +107,29 @@ export class OverlayRenderer {
     const ctx = this.ctx;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.clearRect(0, 0, this.cssW, this.cssH);
-
     if (input.videoW <= 0 || input.videoH <= 0) return;
 
     this.layout = computeCoverLayout(this.cssW, this.cssH, input.videoW, input.videoH);
-
-    // 归一化 → 像素；镜像（前置摄像头）时把 u 翻到 1-u，与 CSS scaleX(-1) 对齐
-    const px = (u: number): number =>
-      this.layout.offsetX + (input.mirrored ? 1 - u : u) * this.layout.drawW;
+    const px = (u: number): number => this.layout.offsetX + (input.mirrored ? 1 - u : u) * this.layout.drawW;
     const py = (v: number): number => this.layout.offsetY + v * this.layout.drawH;
 
-    if (this.showGrid) this.drawThirds(px, py);
-    if (this.showHud) this.drawHud(input);
+    if (input.layers.thirds) this.drawThirds(px, py);
+
+    const snap = input.snapshot;
+    if (snap) {
+      if (input.layers.subjectBox && snap.subjectBox) this.drawRect(px, py, snap.subjectBox, COLOR.subject, "solid", "主体");
+      if (input.layers.targetGhost && snap.targetBox) this.drawRect(px, py, snap.targetBox, COLOR.target, "dashed", "目标");
+      if (input.layers.arrow && snap.arrow && snap.subjectBox && snap.targetBox) this.drawArrow(px, py, snap.subjectBox, snap.targetBox);
+      if (input.layers.horizon && snap.horizonTiltDeg !== null) this.drawHorizon(snap.horizonTiltDeg, input.mirrored);
+      if (snap.zoomHint !== "ok" && input.layers.subjectBox && snap.subjectBox) {
+        this.drawZoomHint(px, py, snap.subjectBox, snap.zoomHint);
+      }
+      if (input.layers.score) this.drawScoreBadge(snap);
+    }
+    if (input.layers.advice && input.adviceText) this.drawAdvice(input.adviceText, snap?.mainAdvice?.priority ?? 99);
   }
 
-  /** 三分线 + 四个三分交点（docs/03 R1） */
+  /* ------------------------------- 三分线 ------------------------------- */
   private drawThirds(px: (u: number) => number, py: (v: number) => number): void {
     const ctx = this.ctx;
     const top = this.layout.offsetY;
@@ -118,10 +137,9 @@ export class OverlayRenderer {
     const left = this.layout.offsetX;
     const right = this.layout.offsetX + this.layout.drawW;
 
-    // 两遍描边：先深色描边，再亮色细线，保证在任何画面上都看得清
     for (const pass of [
-      { width: 3.5, color: "rgba(0, 0, 0, 0.35)" },
-      { width: 1.25, color: "rgba(255, 255, 255, 0.85)" },
+      { width: 3.5, color: COLOR.gridHalo },
+      { width: 1.25, color: COLOR.grid },
     ]) {
       ctx.lineWidth = pass.width;
       ctx.strokeStyle = pass.color;
@@ -139,8 +157,7 @@ export class OverlayRenderer {
       ctx.stroke();
     }
 
-    // 三分交点（后续 R1 的目标点提示就用这四个点）
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+    ctx.fillStyle = COLOR.grid;
     for (const p of THIRD_POINTS) {
       ctx.beginPath();
       ctx.arc(px(p.x), py(p.y), 3, 0, Math.PI * 2);
@@ -148,63 +165,215 @@ export class OverlayRenderer {
     }
   }
 
-  private drawHud(input: RenderInput): void {
+  private drawRect(
+    px: (u: number) => number,
+    py: (v: number) => number,
+    r: NormRect,
+    color: string,
+    style: "solid" | "dashed",
+    label: string,
+  ): void {
     const ctx = this.ctx;
-    const g = input.gate;
-    const latencyMs = input.hasFrameTiming
-      ? (performance.now() * 1e6 - input.captureTsNs) / 1e6
-      : Number.NaN;
+    const x = Math.min(px(r.l), px(r.r));
+    const y = Math.min(py(r.t), py(r.b));
+    const w = Math.abs(px(r.r) - px(r.l));
+    const h = Math.abs(py(r.b) - py(r.t));
 
-    const rows = [
-      "取流   " + input.sourceText,
-      "画面   " + input.videoW + "×" + input.videoH + "  → 叠加层 " +
-        Math.round(this.layout.drawW) + "×" + Math.round(this.layout.drawH) +
-        (this.layout.drawW > this.cssW + 1 ? "（横向裁切）" : this.layout.drawH > this.cssH + 1 ? "（纵向裁切）" : ""),
-      "节流   目标 " + g.targetFps + " fps / 实际 " + g.effectiveFps.toFixed(1) + " fps",
-      "帧     收 " + g.seen + " · 处理 " + g.processed +
-        " · 丢 " + (g.droppedByThrottle + g.droppedWhileBusy) +
-        "（节流 " + g.droppedByThrottle + " / 忙 " + g.droppedWhileBusy + "）",
-      "耗时   单帧处理 " + g.lastProcessMs.toFixed(2) + " ms · 处理中 " + g.inFlight,
-      "延迟   采集→渲染 " + (Number.isNaN(latencyMs) ? "—" : latencyMs.toFixed(1) + " ms"),
-      "网络   " + (input.online ? "浏览器在线（本页不发请求）" : "浏览器离线"),
-    ];
+    ctx.save();
+    ctx.setLineDash(style === "dashed" ? [8, 6] : []);
+    ctx.lineWidth = style === "dashed" ? 2 : 2.5;
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
 
-    ctx.font = HUD_FONT;
-    ctx.textBaseline = "top";
+    // 角标
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    const c = Math.min(14, w / 4, h / 4);
+    ctx.beginPath();
+    ctx.moveTo(x, y + c); ctx.lineTo(x, y); ctx.lineTo(x + c, y);
+    ctx.moveTo(x + w - c, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + c);
+    ctx.moveTo(x + w, y + h - c); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - c, y + h);
+    ctx.moveTo(x + c, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - c);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.font = '12px system-ui, "Microsoft YaHei", sans-serif';
+    ctx.textBaseline = "bottom";
     ctx.textAlign = "left";
+    ctx.fillStyle = color;
+    ctx.fillText(label, x, y - 3);
+  }
 
-    const padX = 10;
-    const padY = 8;
-    const lineH = 16;
-    let boxW = 0;
-    for (const row of rows) boxW = Math.max(boxW, ctx.measureText(row).width);
-    const boxH = rows.length * lineH + padY * 2;
-    const x = 12;
-    const y = 12;
+  private drawArrow(
+    px: (u: number) => number,
+    py: (v: number) => number,
+    subject: NormRect,
+    target: NormRect,
+  ): void {
+    const ctx = this.ctx;
+    const from = { x: px((subject.l + subject.r) / 2), y: py((subject.t + subject.b) / 2) };
+    const to = { x: px((target.l + target.r) / 2), y: py((target.t + target.b) / 2) };
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 6) return;
 
-    ctx.fillStyle = "rgba(8, 11, 15, 0.62)";
-    roundRect(ctx, x, y, boxW + padX * 2, boxH, 8);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.14)";
-    ctx.lineWidth = 1;
-    roundRect(ctx, x, y, boxW + padX * 2, boxH, 8);
+    ctx.save();
+    ctx.strokeStyle = COLOR.target;
+    ctx.fillStyle = COLOR.target;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
     ctx.stroke();
 
-    rows.forEach((row, i) => {
-      ctx.fillStyle = i === rows.length - 1 ? "rgba(147, 161, 177, 1)" : "rgba(232, 237, 243, 0.94)";
-      ctx.fillText(row, x + padX, y + padY + i * lineH);
-    });
+    const ang = Math.atan2(dy, dx);
+    const head = 14;
+    ctx.beginPath();
+    ctx.moveTo(to.x, to.y);
+    ctx.lineTo(to.x - head * Math.cos(ang - 0.4), to.y - head * Math.sin(ang - 0.4));
+    ctx.lineTo(to.x - head * Math.cos(ang + 0.4), to.y - head * Math.sin(ang + 0.4));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** 水平仪：固定参考线 + 随倾角旋转的实际水平线（镜像时角度要反号） */
+  private drawHorizon(tiltDeg: number, mirrored: boolean): void {
+    const ctx = this.ctx;
+    const cx = this.layout.offsetX + this.layout.drawW / 2;
+    const cy = this.layout.offsetY + this.layout.drawH / 2;
+    const half = this.layout.drawW * 0.42;
+    const color = Math.abs(tiltDeg) < 1 ? COLOR.ok : Math.abs(tiltDeg) < 3 ? COLOR.warn : COLOR.bad;
+    const angle = ((mirrored ? -tiltDeg : tiltDeg) * Math.PI) / 180;
+
+    ctx.save();
+    ctx.setLineDash([6, 8]);
+    ctx.strokeStyle = "rgba(255,255,255,0.35)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - half, cy);
+    ctx.lineTo(cx + half, cy);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(half, 0);
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  private drawZoomHint(
+    px: (u: number) => number,
+    py: (v: number) => number,
+    r: NormRect,
+    hint: "in" | "out",
+  ): void {
+    const ctx = this.ctx;
+    void px;
+    void py;
+    const x = Math.min(px(r.l), px(r.r));
+    const y = Math.min(py(r.t), py(r.b));
+    const w = Math.abs(px(r.r) - px(r.l));
+    const h = Math.abs(py(r.b) - py(r.t));
+    const cx = x + w / 2;
+    const cy = y + h / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = COLOR.target;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - 7, cy);
+    ctx.lineTo(cx + 7, cy);
+    if (hint === "in") {
+      ctx.moveTo(cx, cy - 7);
+      ctx.lineTo(cx, cy + 7);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawScoreBadge(snap: GuidanceSnapshot): void {
+    const ctx = this.ctx;
+    const score = snap.displayScore;
+    const color = score < 2.5 ? COLOR.bad : score < 3.5 ? "#ff9f43" : score < 4.2 ? COLOR.warn : COLOR.ok;
+    const cx = this.cssW - 52;
+    const cy = 52;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, 30, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(8,11,15,0.66)";
+    ctx.fill();
+    ctx.lineWidth = snap.ready ? 5 : 3;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.font = 'bold 26px ui-monospace, Consolas, monospace';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(score.toFixed(1), cx, cy + 1);
+
+    ctx.font = '11px system-ui, "Microsoft YaHei", sans-serif';
+    ctx.fillStyle = "rgba(232,237,243,0.75)";
+    ctx.fillText("构图分", cx, cy + 42);
+
+    if (snap.ready) {
+      ctx.font = 'bold 13px system-ui, "Microsoft YaHei", sans-serif';
+      ctx.fillStyle = COLOR.ok;
+      ctx.fillText("可以拍了", cx, cy + 60);
+    }
+    ctx.restore();
+  }
+
+  private drawAdvice(text: string, priority: number): void {
+    const ctx = this.ctx;
+    ctx.font = 'bold 15px system-ui, "Microsoft YaHei", sans-serif';
+    const padX = 14;
+    const padY = 9;
+    const w = ctx.measureText(text).width + padX * 2;
+    const h = 15 + padY * 2;
+    const x = (this.cssW - w) / 2;
+    const y = this.cssH - h - 26;
+    const color = priority <= 20 ? COLOR.bad : priority <= 40 ? COLOR.warn : COLOR.ok;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(8,11,15,0.72)";
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.stroke();
+
+    ctx.fillStyle = "rgba(240,245,250,0.96)";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, this.cssW / 2, y + h / 2 + 0.5);
+    ctx.restore();
   }
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
+function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {
   const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
   ctx.moveTo(x + radius, y);

@@ -14,27 +14,29 @@
           <span class="logo" aria-hidden="true"></span>
           <div>
             <h1>Framilux</h1>
-            <p class="sub">M1 · 步骤 1–2：取流 → FrameGate(10 fps) → 三分线叠加层</p>
+            <p class="sub">M1 · 取流 → FrameGate(10 fps) → 感知 → 打分与引导（R1–R6 / R10 / R11）</p>
           </div>
         </div>
         <p class="offline">离线可用 · 本页不发起任何网络请求</p>
       </header>
 
-      <main class="stage-wrap">
-        <div class="stage" id="stage">
-          <video id="video" playsinline autoplay muted></video>
-          <canvas id="overlay"></canvas>
-          <div class="hint" id="hint" hidden>
-            <p id="hint-text"></p>
-            <button id="btn-retry" type="button">重试</button>
+      <div class="workspace">
+        <main class="stage-wrap">
+          <div class="stage" id="stage">
+            <video id="video" playsinline autoplay muted></video>
+            <canvas id="overlay"></canvas>
+            <div class="hint" id="hint" hidden>
+              <p id="hint-text"></p>
+              <button id="btn-retry" type="button">重试</button>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+        <aside id="panel" class="panel" aria-label="调试面板"></aside>
+      </div>
 
       <footer class="controls">
         <button id="btn-switch" type="button">切换摄像头</button>
-        <button id="btn-grid" type="button" aria-pressed="true">三分线</button>
-        <button id="btn-hud" type="button" aria-pressed="true">调试面板</button>
+        <button id="btn-panel" type="button" aria-pressed="true">调试面板</button>
         <span class="spacer"></span>
         <label class="ctl" for="sel-fps">
           节流目标
